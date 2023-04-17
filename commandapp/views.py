@@ -1,14 +1,9 @@
 import os.path
 import time
-
+from django.http import HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import render
-from django.utils import timezone
-from .models import Command
 from threading import Thread
-import subprocess
-
-
 import os.path
 import subprocess
 from django.utils import timezone
@@ -84,9 +79,24 @@ def command_status(request):
     elif status == '2':
         commands = Command.objects.filter(status=2).values()
     else:
-        return JsonResponse({'status': 'error', 'message': 'Invalid status parameter.'
-})
-
+        return JsonResponse({'status': 'error', 'message': 'Invalid status parameter.'})
     return JsonResponse({'commands': list(commands)})
+
+
+def command_output_file(request):
+    id = request.GET.get('id')
+    if id is None:
+        return HttpResponse('Please provide an id parameter.')
+
+    try:
+        command = Command.objects.get(pk=id)
+        with open(command.output_file.path, 'r') as f:
+            file_content = f.read()
+            response = HttpResponse(file_content, content_type='text/plain')
+            response['Content-Disposition'] = f'attachment; filename={os.path.basename(command.output_file.name)}'
+            return response
+    except Command.DoesNotExist:
+        return HttpResponse(f'Command with id {id} does not exist.')
+
 
 
