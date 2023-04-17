@@ -1,10 +1,18 @@
 import os.path
+import time
+
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from .models import Command
 from threading import Thread
 import subprocess
+
+
+import os.path
+import subprocess
+from django.utils import timezone
+from .models import Command
 
 
 def command_run(command):
@@ -17,40 +25,68 @@ def command_run(command):
     print(log_file)
 
     process = subprocess.Popen(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    status = None
-    while process.poll() is None:
-        print('Process is still running.')
-
-    with open(log_file, 'w') as f:
-        stdout, stderr = process.communicate()
-        f.write(stdout.decode())
     status = 1
+
+    file = Command(command=command, output_file=log_file, command_start_date=timezone.now(), status=status)
+    file.save()
+
+    while process.poll() is None:
+        time.sleep(1)
+
+    stdout, stderr = process.communicate()
+
     if process.returncode == 0:
         status = 0
     elif process.returncode is not None and process.returncode != 0:
         status = 2
-    else:
-        status = 1
-    print(status)
-    file = Command(output_file=log_file, command_start_date=timezone.now(), status=status,
-                   command_end_date=timezone.now())
+
+    with open(log_file, 'w') as f:
+        f.write(stdout.decode())
+
+    file.status = status
+    file.command_end_date = timezone.now()
     file.save()
+
     return status, log_file
+
+
+def command_run_threaded(command):
+    def run_command(command):
+        status, log_file = command_run(command)
+        results.append((status, log_file))
+
+    results = []
+    thread = Thread(target=run_command, args=(command,))
+    thread.start()
+
+    return thread
 
 
 def request(request):
     if request.method == 'POST':
         command = request.POST.get('command')
-        status, log_file = command_run(command)
-        if status == 0:
-            return JsonResponse({'status': 'success', 'message': f'Command "{command}" is being executed.'})
-        elif status == 1:
-            return JsonResponse({'status': 'running', 'message': f'Command "{command}" is still running.'})
-        elif status == 2:
-            with open(log_file, 'r') as f:
-                log_content = f.read()
-            return JsonResponse({'status': 'fail', 'message': f'Command "{command}" could not be executed.',
-                                 'log_content': log_content})
+        thread = command_run_threaded(command)
+        return JsonResponse({'status': 'success', 'message': f'Command "{command}" is being executed.'})
 
     else:
         return render(request, 'index.html')
+
+
+def command_status(request):
+    status = request.GET.get('status')
+    if status is None:
+        return JsonResponse({'status': 'error', 'message': 'Please provide a status parameter.'})
+
+    if status == '0':
+        commands = Command.objects.filter(status=0).values()
+    elif status == '1':
+        commands = Command.objects.filter(status=1).values()
+    elif status == '2':
+        commands = Command.objects.filter(status=2).values()
+    else:
+        return JsonResponse({'status': 'error', 'message': 'Invalid status parameter.'
+})
+
+    return JsonResponse({'commands': list(commands)})
+
+

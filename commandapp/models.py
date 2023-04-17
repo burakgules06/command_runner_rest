@@ -8,8 +8,8 @@ STATUS_CHOICES = [
 class Command(models.Model): #Command
     # command execution/start date
     # command fnish/executed date
-    command_start_date = models.DateTimeField(auto_now_add=True)
-    output_file = models.FileField() # output_file
     command = models.CharField(max_length=100)
-    command_end_date = models.DateTimeField()
-    status = models.IntegerField(choices=STATUS_CHOICES, default=2) # 0basarısız 1basarili 2devamediyor
+    status = models.IntegerField(choices=STATUS_CHOICES, default=1)  #0basarısız 1basarili 2devamediyor
+    output_file = models.FileField()  #output_file
+    command_start_date = models.DateTimeField(auto_now_add=True)
+    command_end_date = models.DateTimeField(auto_now_add=True)
